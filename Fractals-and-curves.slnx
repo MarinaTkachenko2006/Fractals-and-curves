@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="Fractals-and-curves/Fractals-and-curves.vcxproj" Id="54c9c2c8-811c-4067-b5ac-8494d35226ff" />
+</Solution>
