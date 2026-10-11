@@ -33,8 +33,12 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="stb_impl.cpp" />
     <ClCompile Include="tasks.cpp" />
+    <ClCompile Include="dialog_windows.cpp" />
+    <ClCompile Include="l_system.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="tasks.h" />
+    <ClInclude Include="dialog_windows.h" />
+    <ClInclude Include="l_system.h" />
   </ItemGroup>
 </Project>

@@ -1,10 +1,8 @@
-// Сторонние библиотеки
 #include <SDL3/SDL.h>
 #include <imgui.h>
 #include <imgui_impl_sdl3.h>
 #include <imgui_impl_sdlrenderer3.h>
 
-// Стандартные библиотеки
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -13,18 +11,17 @@
 #include <algorithm>
 #include <iostream>
 
-// Наши библиотеки
 #include "tasks.h"
 
-static bool showWindow2 (false);   // Флаг открытости окна заданий
+static bool showWindow2(false);
 
-enum class ActiveTask { None, Task1, Task2, Task3 }; // Перечисление возможных активных заданий
+enum class ActiveTask { None, Task1, Task2, Task3 };
 
-SDL_Window* window = nullptr; // Указатель на окно
-SDL_Renderer* renderer = nullptr; // Указатель на рендерер для отрисовки
-SDL_Event eventer; // Контролёр событий
+SDL_Window* window = nullptr;
+SDL_Renderer* renderer = nullptr;
+SDL_Event eventer;
 
-struct MainImageCallback // Callback, вызываемый ImGui внутри RenderDrawData
+struct MainImageCallback
 {
     SDL_Renderer* renderer = nullptr;
     ImVec2 origin;
@@ -34,70 +31,77 @@ struct MainImageCallback // Callback, вызываемый ImGui внутри Re
 
 int main(int argc, char* argv[])
 {
-    if (!SDL_Init(SDL_INIT_VIDEO)) { // вызов SDL-подсистемы
+    std::srand((unsigned)std::time(nullptr));
+
+    if (!SDL_Init(SDL_INIT_VIDEO)) {
         std::cerr << "SDL_Init failed" << std::endl;
         return -1;
     }
     MainImageCallback mainCb;
 
-    window = SDL_CreateWindow("ImGui Window", 1000, 700, SDL_WINDOW_RESIZABLE); // Создание окна
+    window = SDL_CreateWindow("ImGui Window", 1000, 700, SDL_WINDOW_RESIZABLE);
     if (!window) { std::cerr << "SDL_CreateWindow failed" << std::endl; return 1; }
 
-    renderer = SDL_CreateRenderer(window, nullptr); // Создание рендерера
+    renderer = SDL_CreateRenderer(window, nullptr);
     if (!renderer) { std::cerr << "SDL_CreateRenderer failed" << std::endl; return 1; }
 
-    IMGUI_CHECKVERSION(); // Gроверки версий файлов .h библиотеки ImGUI
-    ImGui::CreateContext(); // Создание глобального контекста для отрисовки
-    ImGui::StyleColorsDark(); // Установка тёмного стиля
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGui::StyleColorsDark();
 
     ImGui_ImplSDL3_InitForSDLRenderer(window, renderer);
-    ImGui_ImplSDLRenderer3_Init(renderer); // Dызов слоя, отвечающего за отрисовку в ImGUI
+    ImGui_ImplSDLRenderer3_Init(renderer);
 
-    ImGuiIO& io = ImGui::GetIO(); // Получение глобального объекта ввода-вывода (для контроля текущего состояния программы)
+    ImGuiIO& io = ImGui::GetIO();
 
-    TaskInterface* currentTask = nullptr; // Текущая активная задача
-    ActiveTask activeTask = ActiveTask::None; // Тип текущей активной задачи
+    TaskInterface* currentTask = nullptr;
+    ActiveTask activeTask = ActiveTask::None;
 
-    bool running (true); // Флаг работы программы
+    bool running(true);
 
-    while (running) { // Пока не закрыли программу
-        while (SDL_PollEvent(&eventer)) { // Контроль событий
+    while (running) {
+        while (SDL_PollEvent(&eventer)) {
             ImGui_ImplSDL3_ProcessEvent(&eventer);
             if (eventer.type == SDL_EVENT_QUIT) running = false;
+
+            if (eventer.type == SDL_EVENT_DROP_FILE) {
+                const char* dropped = eventer.drop.data;
+                if (dropped && currentTask && activeTask == ActiveTask::Task1) {
+                    static_cast<Task1*>(currentTask)->load_file(dropped);
+                }
+            }
         }
 
+        ImGui_ImplSDLRenderer3_NewFrame();
+        ImGui_ImplSDL3_NewFrame();
+        ImGui::NewFrame();
 
-        ImGui_ImplSDLRenderer3_NewFrame(); // Подготовка внутренних буферов рендера ImGui
-        ImGui_ImplSDL3_NewFrame(); // Передача накопленных событий ввода и актуализация состояния мыши/клавиатуры
-        ImGui::NewFrame(); // Создание нового кадра, в течение которого формируется список виджетов
-
-        // Отрисовка главного окна
-        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always); // 10 пикселей от левого верхнего угла окна
+        ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(io.DisplaySize.x - 20, io.DisplaySize.y - 20), ImGuiCond_Always);
         ImGui::Begin("Fractals and curves", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize);
-        ImVec2 contentAvail = ImGui::GetContentRegionAvail(); // Сколько места сейчас доступно внутри главного окна — ширина и высота в пикселях
+        ImVec2 contentAvail = ImGui::GetContentRegionAvail();
 
-       
         ImGui::BeginChild("##button_panel", contentAvail, true);
 
-        // Формирование контекста задачи
         AppContext ctx;
         ctx.renderer = renderer;
         ctx.window = window;
 
-        if (ImGui::Button("Task 1")) { // Кнопка Task 1 нажата
+        if (ImGui::Button("Task 1")) {
             delete currentTask;
+            currentTask = new Task1();
             activeTask = ActiveTask::Task1;
             showWindow2 = true;
             if (currentTask) currentTask->prepare(ctx);
         }
-        if (ImGui::Button("Task 2")) { // Кнопка Task 2 нажата
+        if (ImGui::Button("Task 2")) {
             delete currentTask;
+            currentTask = new Task2();
             activeTask = ActiveTask::Task2;
             showWindow2 = true;
             if (currentTask) currentTask->prepare(ctx);
         }
-        if (ImGui::Button("Task 3")) { // Кнопка Task 3 нажата
+        if (ImGui::Button("Task 3")) {
             delete currentTask;
             currentTask = new Task3();
             activeTask = ActiveTask::Task3;
@@ -108,15 +112,14 @@ int main(int argc, char* argv[])
         ImGui::EndChild();
         ImGui::End();
 
-        // Установка окна задачи
-        if (showWindow2) {
+        if (showWindow2 && currentTask) {
             const char* title =
                 activeTask == ActiveTask::Task1 ? "Task 1" :
                 activeTask == ActiveTask::Task2 ? "Task 2" :
                 activeTask == ActiveTask::Task3 ? "Task 3" : "None";
 
             ImGui::SetNextWindowPos(ImVec2(200, 200), ImGuiCond_FirstUseEver);
-            ImGui::SetNextWindowSize(ImVec2(700, 800), ImGuiCond_FirstUseEver);
+            ImGui::SetNextWindowSize(ImVec2(800, 800), ImGuiCond_FirstUseEver);
             ImGui::Begin(title, &showWindow2, ImGuiWindowFlags_HorizontalScrollbar);
 
             currentTask->draw(ctx);
