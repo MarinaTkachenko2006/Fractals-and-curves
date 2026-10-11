@@ -156,48 +156,40 @@ ImVec2 Task3::evaluate_Bezier_curve(ImVec2& point1, ImVec2& point2, ImVec2& poin
 		coef1 * point1.y + coef2 * point2.y + coef3 * point3.y + coef4 * point4.y);
 }
 
+bool Task3::is_collinear(const ImVec2& a, const ImVec2& b, const ImVec2& c)
+{
+	// Векторное произведение (cross product) векторов AB и AC.
+	// Если оно близко к нулю — точки лежат на одной прямой.
+	float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+	return std::fabs(cross) < 1e-3f;
+}
+
 void Task3::prepare_points_for_curve()
 {
-	prepared_points.clear();
-	prepared_is_added.clear();
+	prepared_points = points;
+	prepared_is_added.assign(points.size(), false);
 
-	if (points.size() < 3) return;
+	size_t i = 3;
+	while (i + 1 < prepared_points.size()) {
+		// условие гладкости из презентации - каждые 3 точки 3*j-1, 3*j, 3*j+1 лежат на одной прямой
+		const ImVec2& A = prepared_points[i - 1];
+		const ImVec2& B = prepared_points[i];
+		const ImVec2& C = prepared_points[i + 1];
 
-	// Первые три точки — как есть
-	prepared_points.push_back(points[0]); prepared_is_added.push_back(false);
-	prepared_points.push_back(points[1]); prepared_is_added.push_back(false);
-	prepared_points.push_back(points[2]); prepared_is_added.push_back(false);
-
-	// Для каждой пары (X_{2k}, X_{2k+1}), k = 1, 2, 3, ...
-	for (size_t k = 1; 2 * k + 1 < points.size(); ++k) {
-		const ImVec2& a = points[2 * k];       // X_{2k}
-		const ImVec2& b = points[2 * k + 1];   // X_{2k+1}
-
-		// узел — середина
-		prepared_points.push_back(ImVec2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f));
-		prepared_is_added.push_back(true);
-
-		// вторая точка пары
-		prepared_points.push_back(b);
-		prepared_is_added.push_back(false);
-
-		// начало следующей пары, если есть
-		if (2 * k + 2 < points.size()) {
-			prepared_points.push_back(points[2 * k + 2]);
-			prepared_is_added.push_back(false);
+		if (!is_collinear(A, B, C)) {
+			// добавляем вспомогательный узел как середину между A и B
+			ImVec2 mid((A.x + B.x) * 0.5f, (A.y + B.y) * 0.5f);
+			prepared_points.insert(prepared_points.begin() + i, mid);
+			prepared_is_added.insert(prepared_is_added.begin() + i, true);
 		}
+		i += 3;
 	}
 
-	if (prepared_points.back().x != points.back().x ||
-		prepared_points.back().y != points.back().y) {
-		prepared_points.back() = points.back();
-		prepared_is_added.back() = false;
-	}
-
-	// Добиваем размер до 3N+1 дубликатами последней точки.
+	// Хвост: добиваем размер до 3N+1 дубликатами последней точки,
+	// и гарантируем, что последняя — points.back()
 	while ((prepared_points.size() - 1) % 3 != 0) {
 		prepared_points.push_back(points.back());
-		prepared_is_added.push_back(false);  
+		prepared_is_added.push_back(false);
 	}
 }
 

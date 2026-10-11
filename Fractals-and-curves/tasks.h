@@ -56,6 +56,8 @@ class Task3 : public TaskInterface {
     ImVec2 evaluate_Bezier_curve(ImVec2& point1, ImVec2& point2,
         ImVec2& point3, ImVec2& point4, double t);
 
+    bool is_collinear(const ImVec2& a, const ImVec2& b, const ImVec2& c);
+
     void prepare_points_for_curve();
 
 public:
