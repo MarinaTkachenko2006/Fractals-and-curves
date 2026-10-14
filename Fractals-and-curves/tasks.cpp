@@ -470,7 +470,6 @@ void Task2::prepare(const AppContext& ctx)
 
 void Task2::reset_to_defaults() // Сброс всех параметров к значениям по умолчанию
 {
-	this->max_steps = 8;
 	this->shown_step = 8;
 	this->left_height = 0.3f;
 	this->right_height = 0.5f;
@@ -619,10 +618,6 @@ void Task2::draw_controls()
 	ImGui::Separator();
 	ImGui::Text("Parameters");
 
-	if (ImGui::SliderInt("Steps", &this->max_steps, 0, 14)) {
-		this->shown_step = this->max_steps;
-		this->dirty = true;
-	}
 	if (ImGui::SliderFloat("Roughness R", &this->roughness, 0.0f, 2.0f, "%.3f")) this->dirty = true;
 	if (ImGui::SliderFloat("Left height", &this->left_height, 0.0f, 1.0f, "%.3f")) this->dirty = true;
 	if (ImGui::SliderFloat("Right height", &this->right_height, 0.0f, 1.0f, "%.3f")) this->dirty = true;

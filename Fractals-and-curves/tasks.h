@@ -80,7 +80,7 @@ public:
 };
 
 class Task2 : public TaskInterface {
-	int max_steps = 8; // Число шагов алгоритма
+	const int max_steps = 12; // Максимальное число шагов алгоритма
 	int shown_step = 8; // Отображаемый шаг
 
 	float left_height = 0.3f; // Высота левого конца (0..1)
