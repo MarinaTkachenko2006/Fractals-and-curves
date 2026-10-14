@@ -80,6 +80,34 @@ public:
 };
 
 class Task2 : public TaskInterface {
+	int max_steps = 8; // Число шагов алгоритма
+	int shown_step = 8; // Отображаемый шаг
+
+	float left_height = 0.3f; // Высота левого конца (0..1)
+	float right_height = 0.5f; // Высота правого конца (0..1)
+	float roughness = 0.6f; // Шероховатость R: смещение середины в пределах [-R*l, R*l]
+	int seed = 1; // Зерно генератора случайных чисел
+
+	bool show_prev_step = true; // Показывать предыдущий шаг
+	bool show_points = true; // Показывать вершины ломаной
+	bool fill_mountain = true; // Заливать горы
+
+	bool animate = false; // Автоматическое пошаговое воспроизведение
+	float anim_delay = 0.6f; // Задержка между шагами в секундах
+	float anim_timer = 0.0f; // Время с последнего шага анимации
+
+	ImU32 mountain_color = IM_COL32(90, 75, 60, 255); // Цвет гор
+	ImU32 line_color = IM_COL32(30, 30, 30, 255); // Цвет ломаной
+
+	std::vector<std::vector<ImVec2>> steps; // Ломаные на каждом шаге (x в [0, 1], y — высота)
+	float bb_min_y = 0.0f, bb_max_y = 1.0f; // Границы по высоте
+	bool dirty = true; // Флаг, указывающий нужна ли пересборка
+
+	void rebuild(); // Пересчитать все шаги алгоритма
+	void reset_to_defaults(); // Сброс параметров
+	void draw_canvas(float w, float h); // Нарисовать холст
+	void draw_controls(); // Нарисовать панель управления
+
 public:
     ~Task2() noexcept override;
     void prepare(const AppContext& ctx) override;

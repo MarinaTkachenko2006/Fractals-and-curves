@@ -8,6 +8,7 @@
 #include <sstream>
 #include <cstdlib>
 #include <algorithm>
+#include <random>
 
 Task1::~Task1() noexcept {}
 
@@ -462,11 +463,224 @@ void Task1::draw(const AppContext& ctx)
 
 Task2::~Task2() noexcept {}
 
-void Task2::prepare(const AppContext& ctx) {}
+void Task2::prepare(const AppContext& ctx)
+{
+	this->reset_to_defaults();
+}
+
+void Task2::reset_to_defaults() // Сброс всех параметров к значениям по умолчанию
+{
+	this->max_steps = 8;
+	this->shown_step = 8;
+	this->left_height = 0.3f;
+	this->right_height = 0.5f;
+	this->roughness = 0.6f;
+	this->seed = 1;
+	this->show_prev_step = true;
+	this->show_points = true;
+	this->fill_mountain = true;
+	this->animate = false;
+	this->anim_delay = 0.6f;
+	this->anim_timer = 0.0f;
+	this->mountain_color = IM_COL32(90, 75, 60, 255);
+	this->line_color = IM_COL32(30, 30, 30, 255);
+	this->dirty = true;
+}
+
+void Task2::rebuild() // Midpoint displacement: каждый шаг делит все отрезки пополам
+{
+	std::mt19937 rng((unsigned)this->seed);
+	std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+	this->steps.clear();
+	this->steps.push_back({ ImVec2(0.0f, this->left_height), ImVec2(1.0f, this->right_height) });
+
+	for (int k = 1; k <= this->max_steps; ++k) {
+		const std::vector<ImVec2>& prev = this->steps.back();
+		std::vector<ImVec2> next;
+		next.reserve(prev.size() * 2 - 1);
+
+		for (size_t i = 0; i + 1 < prev.size(); ++i) {
+			const ImVec2& a = prev[i];
+			const ImVec2& b = prev[i + 1];
+			float l = b.x - a.x; // Длина отрезка
+
+			// Высота середины = среднее высот концов + случайное смещение из [-R*l, R*l]
+			ImVec2 mid((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f + dist(rng) * this->roughness * l);
+			next.push_back(a);
+			next.push_back(mid);
+		}
+		next.push_back(prev.back());
+		this->steps.push_back(std::move(next));
+	}
+
+	// Точки каждого шага содержатся в следующем, поэтому границы берём по последнему
+	this->bb_min_y = 0.0f;
+	this->bb_max_y = 1.0f;
+	for (const auto& p : this->steps.back()) {
+		this->bb_min_y = std::min(this->bb_min_y, p.y);
+		this->bb_max_y = std::max(this->bb_max_y, p.y);
+	}
+
+	if (this->shown_step > this->max_steps) this->shown_step = this->max_steps;
+	this->dirty = false;
+}
+
+void Task2::draw_canvas(float canvas_w, float canvas_h)
+{
+	ImGui::BeginChild("midpoint_canvas", ImVec2(canvas_w, canvas_h), ImGuiChildFlags_Borders);
+
+	ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+	ImVec2 canvas_size = ImGui::GetContentRegionAvail();
+	ImVec2 canvas_end(canvas_pos.x + canvas_size.x, canvas_pos.y + canvas_size.y);
+
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	dl->AddRectFilledMultiColor(canvas_pos, canvas_end,
+		IM_COL32(120, 170, 230, 255), IM_COL32(120, 170, 230, 255),
+		IM_COL32(225, 238, 250, 255), IM_COL32(225, 238, 250, 255)); // Небо
+
+	if (this->steps.empty() || canvas_size.x < 1.0f || canvas_size.y < 1.0f) {
+		ImGui::EndChild();
+		return;
+	}
+
+	const float margin = 20.0f;
+	float avail_w = canvas_size.x - 2.0f * margin;
+	float avail_h = canvas_size.y - 2.0f * margin;
+	float range_y = std::max(this->bb_max_y - this->bb_min_y, 1e-6f);
+
+	auto to_screen = [&](const ImVec2& p) -> ImVec2 {
+		return ImVec2(
+			canvas_pos.x + margin + p.x * avail_w,
+			canvas_pos.y + margin + (this->bb_max_y - p.y) / range_y * avail_h // Ось Y направлена вверх
+		);
+		};
+
+	dl->PushClipRect(canvas_pos, canvas_end, true);
+
+	const std::vector<ImVec2>& cur = this->steps[this->shown_step];
+
+	if (this->fill_mountain) {
+		float bottom = canvas_end.y;
+		for (size_t i = 0; i + 1 < cur.size(); ++i) {
+			ImVec2 a = to_screen(cur[i]);
+			ImVec2 b = to_screen(cur[i + 1]);
+			dl->AddQuadFilled(a, b, ImVec2(b.x, bottom), ImVec2(a.x, bottom), this->mountain_color);
+		}
+	}
+
+	if (this->show_prev_step && this->shown_step > 0) {
+		const std::vector<ImVec2>& prev = this->steps[this->shown_step - 1];
+		for (size_t i = 0; i + 1 < prev.size(); ++i)
+			dl->AddLine(to_screen(prev[i]), to_screen(prev[i + 1]), IM_COL32(230, 120, 30, 200), 1.5f);
+	}
+
+	for (size_t i = 0; i + 1 < cur.size(); ++i)
+		dl->AddLine(to_screen(cur[i]), to_screen(cur[i + 1]), this->line_color, 2.0f);
+
+	if (this->show_points && cur.size() <= 1025) {
+		for (size_t i = 0; i < cur.size(); ++i) {
+			// Нечётные вершины — середины, добавленные на текущем шаге
+			bool is_new = this->shown_step > 0 && (i % 2 == 1);
+			dl->AddCircleFilled(to_screen(cur[i]), is_new ? 4.0f : 3.0f,
+				is_new ? IM_COL32(220, 40, 40, 255) : IM_COL32(40, 40, 160, 255));
+		}
+	}
+
+	dl->PopClipRect();
+	ImGui::EndChild();
+}
+
+void Task2::draw_controls()
+{
+	ImGui::Text("Midpoint displacement");
+	ImGui::Separator();
+
+	ImGui::Text("Step: %d / %d", this->shown_step, this->max_steps);
+	ImGui::SliderInt("Shown step", &this->shown_step, 0, this->max_steps);
+
+	if (ImGui::Button("<< Prev")) {
+		if (this->shown_step > 0) --this->shown_step;
+		this->animate = false;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Next >>")) {
+		if (this->shown_step < this->max_steps) ++this->shown_step;
+		this->animate = false;
+	}
+	ImGui::SameLine();
+	if (ImGui::Button(this->animate ? "Pause" : "Play")) {
+		this->animate = !this->animate;
+		if (this->animate && this->shown_step >= this->max_steps) this->shown_step = 0;
+		this->anim_timer = 0.0f;
+	}
+	ImGui::SliderFloat("Step delay, s", &this->anim_delay, 0.05f, 3.0f, "%.2f");
+
+	ImGui::Separator();
+	ImGui::Text("Parameters");
+
+	if (ImGui::SliderInt("Steps", &this->max_steps, 0, 14)) {
+		this->shown_step = this->max_steps;
+		this->dirty = true;
+	}
+	if (ImGui::SliderFloat("Roughness R", &this->roughness, 0.0f, 2.0f, "%.3f")) this->dirty = true;
+	if (ImGui::SliderFloat("Left height", &this->left_height, 0.0f, 1.0f, "%.3f")) this->dirty = true;
+	if (ImGui::SliderFloat("Right height", &this->right_height, 0.0f, 1.0f, "%.3f")) this->dirty = true;
+	if (ImGui::InputInt("Seed", &this->seed)) this->dirty = true;
+	if (ImGui::Button("Random seed", ImVec2(-FLT_MIN, 0))) {
+		this->seed = std::rand();
+		this->dirty = true;
+	}
+
+	ImGui::Separator();
+	ImGui::Text("Display");
+	ImGui::Checkbox("Show previous step", &this->show_prev_step);
+	ImGui::Checkbox("Show points", &this->show_points);
+	ImGui::Checkbox("Fill mountains", &this->fill_mountain);
+
+	ImVec4 mc = ImGui::ColorConvertU32ToFloat4(this->mountain_color);
+	if (ImGui::ColorEdit4("Mountain color", &mc.x)) this->mountain_color = ImGui::ColorConvertFloat4ToU32(mc);
+	ImVec4 lc = ImGui::ColorConvertU32ToFloat4(this->line_color);
+	if (ImGui::ColorEdit4("Line color", &lc.x)) this->line_color = ImGui::ColorConvertFloat4ToU32(lc);
+
+	ImGui::Separator();
+	if (ImGui::Button("Reset to defaults", ImVec2(-FLT_MIN, 0))) this->reset_to_defaults();
+
+	if (!this->steps.empty()) {
+		size_t n = this->steps[this->shown_step].size();
+		float l = 1.0f / (float)(1 << this->shown_step); // Длина отрезка на текущем шаге
+		ImGui::Text("Points: %zu, segments: %zu", n, n - 1);
+		if (this->shown_step > 0)
+			ImGui::Text("Displacement: +-%.4f", this->roughness * l * 2.0f);
+		if (this->show_points && n > 1025)
+			ImGui::TextWrapped("Too many points to draw them");
+	}
+}
 
 void Task2::draw(const AppContext& ctx)
 {
-	ImGui::Text("Task 2 is not implemented yet");
+	const float PANEL_W = 320.0f;
+
+	if (this->dirty) this->rebuild();
+
+	if (this->animate) {
+		this->anim_timer += ImGui::GetIO().DeltaTime;
+		if (this->anim_timer >= this->anim_delay) {
+			this->anim_timer = 0.0f;
+			if (this->shown_step < this->max_steps) ++this->shown_step;
+			else this->animate = false;
+		}
+	}
+
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	float canvas_w = avail.x - PANEL_W - ImGui::GetStyle().ItemSpacing.x;
+
+	this->draw_canvas(canvas_w, avail.y);
+	ImGui::SameLine();
+
+	ImGui::BeginChild("midpoint_controls", ImVec2(PANEL_W, avail.y), ImGuiChildFlags_Borders);
+	this->draw_controls();
+	ImGui::EndChild();
 }
 
 int Task3::find_point_at(const ImVec2& local_pos) const
